@@ -29,7 +29,8 @@
 #include <stdbool.h>
 
 enum ds_image_format {
-    BGRA8888
+    BGRA8888,
+    BGR888
 };
 
 struct ds_fb {

@@ -51,6 +51,7 @@ void ds_fb_draw_region(struct ds_fb *fb, const struct image *region,
     long i, j, xoffset, yoffset;
     long w = region->width;
     long h = region->height;
+    size_t pixel_size = 0;
 
     assert(fb);
     assert(region);
@@ -65,18 +66,28 @@ void ds_fb_draw_region(struct ds_fb *fb, const struct image *region,
         h = fb->yres;
     }
 
+    switch (fb->image_format) {
+    case BGRA8888:
+        pixel_size = 4;
+        break;
+    case BGR888:
+        pixel_size = 3;
+        break;
+    }
+
     xoffset = (long)((fb->xres - w) * xalign);
     yoffset = (long)((fb->yres - h) * yalign);
 
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
-            long location = ((i + fb->xoffset + xoffset) << 2) +
+            long location = ((i + fb->xoffset + xoffset) * pixel_size) +
                             (j + fb->yoffset + yoffset) * fb->stride;
 
             *(fb->data + location)     = region->pixels[j * w + i].blue;
             *(fb->data + location + 1) = region->pixels[j * w + i].green;
             *(fb->data + location + 2) = region->pixels[j * w + i].red;
-            *(fb->data + location + 3) = 0;
+            if (pixel_size == 4)
+                *(fb->data + location + 3) = 0;
         }
     }
 }
@@ -133,14 +144,16 @@ int ds_fb_init(struct ds_fb *ds_fb)
         goto close_on_err;
     }
 
-    if (!(vinfo.bits_per_pixel == 32 &&
+    if (!(vinfo.bits_per_pixel >= 24 &&
                 vinfo.blue.offset == 0 && vinfo.blue.length == 8 &&
                 vinfo.green.offset == 8 && vinfo.green.length == 8 &&
                 vinfo.red.offset == 16 && vinfo.red.length == 8)) {
-        crit("Only BGRA8888 is implemented, your fb is:\n" \
-                "\tb_offset: %d\tb_length: %d\n" \
-                "\tg_offset: %d\tg_length: %d\n" \
-                "\tr_offset: %d\tr_length: %d", \
+        crit("Only BGRA8888 is implemented, your fb is:\n"
+                "\tbits per pixel: %d\n"
+                "\tb_offset: %d\tb_length: %d\n"
+                "\tg_offset: %d\tg_length: %d\n"
+                "\tr_offset: %d\tr_length: %d",
+                vinfo.bits_per_pixel,
                 vinfo.blue.offset, vinfo.blue.length,
                 vinfo.green.offset, vinfo.green.length,
                 vinfo.red.offset, vinfo.red.length);
@@ -156,7 +169,7 @@ int ds_fb_init(struct ds_fb *ds_fb)
         wrn("Virtual resolution is not the same of visible one. Logo will be " \
             "centralized with regard to visible resolution");
 
-    ds_fb->image_format = BGRA8888;
+    ds_fb->image_format = (vinfo.bits_per_pixel == 32 ? BGRA8888 : BGR888);
     ds_fb->xres = vinfo.xres;
     ds_fb->yres = vinfo.yres;
     ds_fb->xres_virtual = vinfo.xres_virtual;
